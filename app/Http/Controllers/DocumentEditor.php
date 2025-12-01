@@ -22,37 +22,25 @@ class DocumentEditor extends Controller
         return JWT::encode($payload, $secret, 'HS256');
     }
 
-    public function index($id)
-    {
-        $user = Auth::user();
-        $this->document = Document::findOrFail($id);
-        $filename = $this->document->filename;
-        $documentServerUrl = env('ONLYOFFICE_URL', 'http://127.0.0.1:8081'); // ✅ Vérifie le bon port Docker
-        $documentUrl = asset("storage/{$filename}");
-        $callbackUrl = url("api/wopi/files/{$id}"); // ✅ Correction de l'URL de callback
-        
-        $documentKey = md5($filename . time()); // ✅ Générer une clé unique
+   public function index($id)
+{
+    $user = Auth::user();
+    $this->document = Document::findOrFail($id);
+    $filename = $this->document->filename;
+    $documentServerUrl = env('ONLYOFFICE_URL', 'http://127.0.0.1:8081');
+    $documentUrl = asset("storage/{$filename}");
+    $callbackUrl = url("api/wopi/files/{$id}");
+    
+    // ✅ Clé stable
+    $documentKey = 'doc_' . $id;
 
-        // Configuration envoyée à ONLYOFFICE
-        $config = [
-            "document" => [
-                "fileType" => pathinfo($filename, PATHINFO_EXTENSION),
-                "key" => $documentKey,
-                "title" => "{$user->name} travaille sur: {$this->document->nom}",
-                "url" => $documentUrl,
-            ],
-            "editorConfig" => [
-                "callbackUrl" => $callbackUrl, // ✅ Correction du callback
-                "mode" => "edit",
-                "autosave" => true,  // ✅ Permet l'enregistrement automatique
-                "lang" => "fr",
-                "user" => [
-                    "id" => strval  ($user->id),
-                    "name" => $user->name,
-                ],
-                
-            ],
-            "permissions" => [
+    $config = [
+        "document" => [
+            "fileType" => pathinfo($filename, PATHINFO_EXTENSION),
+            "key" => $documentKey,
+            "title" => "{$user->name} travaille sur: {$this->document->nom}",
+            "url" => $documentUrl,
+            "permissions" => [  // ✅ ICI, DANS "document"
                 "edit" => true,
                 "download" => true,
                 "print" => true,
@@ -61,18 +49,26 @@ class DocumentEditor extends Controller
                 "modifyContentControl" => true,
                 "modifyFilter" => true,
                 "review" => true,
+            ]
+        ],
+        "editorConfig" => [
+            "callbackUrl" => $callbackUrl,
+            "mode" => "edit",
+            "autosave" => true,
+            "lang" => "fr",
+            "user" => [
+                "id" => strval($user->id),
+                "name" => $user->name,
             ],
-            "width" => "100%",
-            "height" => "100%",
-            "type" => "desktop or mobile"
-        ];
+        ],
+        "width" => "100%",
+        "height" => "100%",
+        "type" => "desktop or mobile"
+    ];
 
-        // Générer un token JWT pour sécuriser le document
-        $token = $this->generateToken($config);
-        $config["token"] = $token;
-
-        return view('documentEdit', compact('documentServerUrl', 'documentUrl', 'filename', 'token', 'config'));
-    }
+    $token = $this->generateToken($config);
+    return view('documentEdit', compact('documentServerUrl', 'token', 'config'));
+}
 
     public function callback(Request $request, $id)
    {
