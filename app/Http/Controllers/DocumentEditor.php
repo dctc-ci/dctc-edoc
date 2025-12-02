@@ -17,12 +17,12 @@ class DocumentEditor extends Controller
     public $url ;
     // Générer un token JWT pour sécuriser l'accès
     private function generateToken($payload)
-    {
-        $secret = env('ONLYOFFICE_SECRET', 'default_secret_key'); // ✅ Utiliser une clé dynamique
-        return JWT::encode($payload, $secret, 'HS256');
-    }
+{
+    $secret = env('ONLYOFFICE_JWT_SECRET');
+    return JWT::encode($payload, $secret, 'HS256');
+}
 
-   public function index($id)
+public function index($id)
 {
     $user = Auth::user();
     $this->document = Document::findOrFail($id);
@@ -30,8 +30,7 @@ class DocumentEditor extends Controller
     $documentServerUrl = env('ONLYOFFICE_URL', 'http://127.0.0.1:8081');
     $documentUrl = asset("storage/{$filename}");
     $callbackUrl = url("api/wopi/files/{$id}");
-    
-    // ✅ Clé stable
+
     $documentKey = 'doc_' . $id;
 
     $config = [
@@ -40,7 +39,7 @@ class DocumentEditor extends Controller
             "key" => $documentKey,
             "title" => "{$user->name} travaille sur: {$this->document->nom}",
             "url" => $documentUrl,
-            "permissions" => [  // ✅ ICI, DANS "document"
+            "permissions" => [
                 "edit" => true,
                 "download" => true,
                 "print" => true,
@@ -63,12 +62,16 @@ class DocumentEditor extends Controller
         ],
         "width" => "100%",
         "height" => "100%",
-        "type" => "desktop or mobile"
+        "type" => "desktop"
     ];
 
+    // 🔥 Ajouter le token au JSON envoyé à OnlyOffice
     $token = $this->generateToken($config);
+    $config['token'] = $token;
+
     return view('documentEdit', compact('documentServerUrl', 'token', 'config'));
 }
+
 
     public function callback(Request $request, $id)
    {
