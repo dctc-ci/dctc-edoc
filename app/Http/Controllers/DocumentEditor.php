@@ -17,28 +17,41 @@ class DocumentEditor extends Controller
     public $url ;
     // Générer un token JWT pour sécuriser l'accès
     private function generateToken($payload)
-{
-    $secret = env('ONLYOFFICE_JWT_SECRET');
-    return JWT::encode($payload, $secret, 'HS256');
-}
+    {
+        $secret = env('ONLYOFFICE_SECRET', 'default_secret_key'); // ✅ Utiliser une clé dynamique
+        return JWT::encode($payload, $secret, 'HS256');
+    }
 
-public function index($id)
-{
-    $user = Auth::user();
-    $this->document = Document::findOrFail($id);
-    $filename = $this->document->filename;
-    $documentServerUrl = env('ONLYOFFICE_URL', 'http://127.0.0.1:8081');
-    $documentUrl = asset("storage/{$filename}");
-    $callbackUrl = url("api/wopi/files/{$id}");
+    public function index($id)
+    {
+        $user = Auth::user();
+        $this->document = Document::findOrFail($id);
+        $filename = $this->document->filename;
+        $documentServerUrl = env('ONLYOFFICE_URL', 'http://127.0.0.1:8081'); // ✅ Vérifie le bon port Docker
+        $documentUrl = asset("storage/{$filename}");
+        $callbackUrl = url("api/wopi/files/{$id}"); // ✅ Correction de l'URL de callback
 
-    $documentKey = 'doc_' . $id;
+        $documentKey = md5($filename . time()); // ✅ Générer une clé unique
 
-    $config = [
-        "document" => [
-            "fileType" => pathinfo($filename, PATHINFO_EXTENSION),
-            "key" => $documentKey,
-            "title" => "{$user->name} travaille sur: {$this->document->nom}",
-            "url" => $documentUrl,
+        // Configuration envoyée à ONLYOFFICE
+        $config = [
+            "document" => [
+                "fileType" => pathinfo($filename, PATHINFO_EXTENSION),
+                "key" => $documentKey,
+                "title" => "{$user->name} travaille sur: {$this->document->nom}",
+                "url" => $documentUrl,
+            ],
+            "editorConfig" => [
+                "callbackUrl" => $callbackUrl, // ✅ Correction du callback
+                "mode" => "edit",
+                "autosave" => true,  // ✅ Permet l'enregistrement automatique
+                "lang" => "fr",
+                "user" => [
+                    "id" => strval  ($user->id),
+                    "name" => $user->name,
+                ],
+
+            ],
             "permissions" => [
                 "edit" => true,
                 "download" => true,
@@ -48,30 +61,18 @@ public function index($id)
                 "modifyContentControl" => true,
                 "modifyFilter" => true,
                 "review" => true,
-            ]
-        ],
-        "editorConfig" => [
-            "callbackUrl" => $callbackUrl,
-            "mode" => "edit",
-            "autosave" => true,
-            "lang" => "fr",
-            "user" => [
-                "id" => strval($user->id),
-                "name" => $user->name,
             ],
-        ],
-        "width" => "100%",
-        "height" => "100%",
-        "type" => "desktop"
-    ];
+            "width" => "100%",
+            "height" => "100%",
+            "type" => "desktop or mobile"
+        ];
 
-    // 🔥 Ajouter le token au JSON envoyé à OnlyOffice
-    $token = $this->generateToken($config);
-    $config['token'] = $token;
+        // Générer un token JWT pour sécuriser le document
+        $token = $this->generateToken($config);
+        $config["token"] = $token;
 
-    return view('documentEdit', compact('documentServerUrl', 'token', 'config'));
-}
-
+        return view('documentEdit', compact('documentServerUrl', 'documentUrl', 'filename', 'token', 'config'));
+    }
 
     public function callback(Request $request, $id)
    {
@@ -79,7 +80,7 @@ public function index($id)
     $document = Document::findOrFail($id); // Récupérer le document
     $filename = $document->filename; // Accéder au nom du fichier
     \Log::info('Données reçues depuis ONLYOFFICE:', ['data' => json_encode($data, JSON_PRETTY_PRINT)]);
-    
+
     if (!isset($data['status'])) {
         \Log::info('Document est Manquant:');
         return response()->json(['error' => 'Statut manquant'], 400);
@@ -94,11 +95,11 @@ public function index($id)
             if (isset($data['status']) && $data['status'] == 2) {
                 $fileUrl = $data['url'] ?? null;
                 //$fileName = 'document_modifie.docx'; // Nom du fichier enregistré
-        
+
                 if ($fileUrl) {
                     // Télécharger le fichier
                     $fileContents = file_get_contents($fileUrl);
-                    
+
                     if ($fileContents !== false) {
                         // Enregistrer dans storage/app/archives/
                         Storage::disk('public')->put("$filename", $fileContents);
@@ -106,11 +107,11 @@ public function index($id)
                         return response()->json(['status' => 'success']);
                     } else {
                         \Log::error("❌ Erreur lors du téléchargement du fichier.");
-                        return response()->json(['status' => 'error', 'message' => 'Download failed']);
+                         return response()->json(['status' => 'error', 'message' => 'Download failed']);
                     }
                 }
             }
-        
+
         case 4:
             // Fermeture de l'édition
             \Log::info('Document en edition Terminé');
@@ -128,7 +129,7 @@ public function index($id)
         }
 
 
-   
+
     return response()->json(['message' => 'OK']);
    }
 }
