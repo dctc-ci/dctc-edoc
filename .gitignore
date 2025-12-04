@@ -6,7 +6,8 @@
 
 # --- Logs ---
 /storage/logs/*.log
-/storage/logs/.log.
+/storage/logs/*.log.*
+
 /storage/framework/cache/data/*
 /storage/framework/views/*
 /storage/framework/sessions/*
@@ -31,7 +32,6 @@
 /storage/app/public/archives/
 /storage/app/private/
 /storage/app/livewire-tmp/
-#/storage/app/private/storage/  # Cas particulier que tu avais
 
 # Temp Uploads / Livewire tmp
 /storage/framework/cache/data/*
