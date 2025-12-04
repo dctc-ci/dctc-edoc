@@ -12,6 +12,8 @@ class Folder extends Model
     protected $fillable = ['name','parent_id','service_id','verrouille','code_verrou','user_id'];
 
     // Evet boot pour créer automatiquement les permissions
+     // Evet boot pour créer automatiquement les permissions
+      // Evet boot pour créer automatiquement les permissions
     protected static function boot()
     {
         parent::boot();
